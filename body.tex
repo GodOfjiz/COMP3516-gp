@@ -1,0 +1,128 @@
+\section{Group Contribution}
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{0.22\linewidth}p{0.18\linewidth}p{0.48\linewidth}}
+\toprule
+\textbf{Group Member} & \textbf{UID} & \textbf{Contribution} \\
+\midrule
+Your name & Your UID & Implemented the final notebook version, prepared the final CSV outputs, and wrote the report draft. \\
+Teammate name & Teammate UID & \textit{Fill in based on your team's actual division of work.} \\
+\bottomrule
+\end{tabular}
+\caption{Placeholder contribution table. Replace the names, UIDs, and contribution descriptions before submission.}
+\label{tab:contribution}
+\end{table}
+
+\section{Data Visualization}
+The OctoNet subset used in this project contains three sensing modalities for each sample: infrared array (IRA), WiFi CSI, and IMU. The provided CSV file contains 463 rows in total, including 400 labeled training rows and 63 masked rows for prediction. For Task 1, we visualized one IRA sample from each activity using the inferno colormap and plotted the WiFi amplitude sequence for one example file using the second link and subcarrier index 1.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{ll}
+\toprule
+\textbf{Activity} & \textbf{Sample File} \\
+\midrule
+Sitting & \texttt{20240519162427225649.pickle} \\
+Walking & \texttt{20240519163436130972.pickle} \\
+Sleeping & \texttt{20240518140039079953.pickle} \\
+Falling down & \texttt{20240521213146575725.pickle} \\
+Jumping & \texttt{20240521213452255777.pickle} \\
+\bottomrule
+\end{tabular}
+\caption{Files used for the Task 1 visualizations.}
+\label{tab:task1-files}
+\end{table}
+
+\begin{figure*}[t]
+\centering
+\subfloat[Sitting]{\includegraphics[width=0.18\textwidth]{../output_visualizations/ira_sit.png}}
+\hfill
+\subfloat[Walking]{\includegraphics[width=0.18\textwidth]{../output_visualizations/ira_walk.png}}
+\hfill
+\subfloat[Sleeping]{\includegraphics[width=0.18\textwidth]{../output_visualizations/ira_sleep.png}}
+\hfill
+\subfloat[Falling down]{\includegraphics[width=0.18\textwidth]{../output_visualizations/ira_falldown.png}}
+\hfill
+\subfloat[Jumping]{\includegraphics[width=0.18\textwidth]{../output_visualizations/ira_jump.png}}
+\caption{IRA visualizations generated with the inferno colormap. Each image is the temporal average of one sample from the corresponding activity class.}
+\label{fig:ira-visualizations}
+\end{figure*}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\linewidth]{../output_visualizations/wifi_amp_link2_subcarrier1.png}
+\caption{WiFi CSI amplitude plot for the sitting sample \texttt{20240519162427225649.pickle}, using link 2 and subcarrier index 1.}
+\label{fig:wifi-visualization}
+\end{figure}
+
+The IRA images show coarse thermal spatial patterns, which are useful for posture-related classes such as sitting and sleeping. The WiFi amplitude plot shows a temporal signature rather than a spatial one; this suggests that WiFi may capture motion trends, but it is likely to be more sensitive to cross-session and cross-user variation than IMU.
+
+\section{Single Modality Models}
+\subsection{Model Design}
+For each modality, we used the same overall classifier structure with modality-specific input shapes. Each sample is treated as a sequence of frames. At each time step, the spatial dimensions are flattened and projected into a 128-dimensional hidden representation. The resulting sequence is then processed by a two-layer bidirectional LSTM with dropout 0.2. The final forward and backward hidden states are concatenated and passed through a linear classification head to predict one of the five activities.
+
+This design was chosen because the dataset is naturally sequential. IRA, WiFi, and IMU all contain time-varying measurements, so an LSTM-based model can capture temporal dependencies better than a purely frame-wise classifier. The bidirectional version was retained in the final notebook because it allows the encoder to use both past and future context within each sequence while keeping the architecture relatively simple.
+
+\subsection{Implementation Details}
+The notebook first validates the 400 labeled rows from \texttt{activity\_masked.csv} and ignores the 63 masked rows during training. A key implementation detail is the train/validation split. Instead of splitting rows independently, samples are grouped into short recording sessions using user ID, activity label, and timestamp gaps of at most 60 seconds. Entire sessions are then assigned to either the training or validation split. This avoids putting near-duplicate windows from the same short recording on both sides of the split.
+
+The final grouped split produced 313 training samples and 87 validation samples. All models were trained for 50 epochs with Adam, learning rate \(10^{-3}\), and cross-entropy loss. Random seeds were fixed to 42 for reproducibility. During batching, variable-length sequences were padded in the collate function, and WiFi data was converted to magnitude by taking the absolute value of the CSI frames.
+
+\subsection{Validation Results}
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lc}
+\toprule
+\textbf{Modality} & \textbf{Validation Accuracy} \\
+\midrule
+IRA & 0.4253 \\
+WiFi & 0.3678 \\
+IMU & 0.4368 \\
+\bottomrule
+\end{tabular}
+\caption{Grouped-split validation accuracy for the single-modality models.}
+\label{tab:single-results}
+\end{table}
+
+Among the three single-modality models, IMU achieved the highest validation accuracy at 0.4368. This is consistent with the intuition that body-mounted motion measurements are directly related to the target activities. IRA achieved 0.4253, which suggests that thermal spatial structure is also informative, especially for posture-related classes. WiFi was the weakest single modality at 0.3678, likely because amplitude-only CSI features are noisier and less directly tied to the activity class under a cross-session validation setting.
+
+These results are lower than the earlier optimistic numbers obtained from row-wise splitting, but they provide a more realistic estimate of generalization because the validation set no longer contains windows from the same short recording sessions as the training set.
+
+\section{Multi Modality Models}
+\subsection{Model Design}
+The multimodal model uses one bidirectional LSTM encoder per modality. IRA, WiFi, and IMU are each processed by a dedicated branch with the same hidden size, layer count, and dropout as the single-modality models. The encoded features from all three branches are concatenated and passed through a small multilayer perceptron with ReLU and dropout before the final 5-class prediction layer.
+
+This architecture was chosen because each modality provides complementary information. IMU captures motion directly, IRA captures coarse thermal posture, and WiFi captures temporal RF variation. Concatenating learned modality embeddings is a simple but effective fusion strategy for this project size.
+
+\subsection{Implementation Details}
+The multimodal model reuses the same grouped train/validation split as the single-modality experiments. Training settings were also kept consistent: Adam optimizer, learning rate \(10^{-3}\), dropout 0.2, fixed seed 42, and 50 training epochs. The best validation checkpoint across the 50 epochs was saved as the final multimodal model.
+
+\subsection{Validation Results}
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lc}
+\toprule
+\textbf{Model} & \textbf{Validation Accuracy} \\
+\midrule
+Best single modality (IMU) & 0.4368 \\
+Multimodal model & 0.5632 \\
+\bottomrule
+\end{tabular}
+\caption{Comparison between the best single-modality model and the multimodal model.}
+\label{tab:multi-results}
+\end{table}
+
+The multimodal model achieved 0.5632 validation accuracy, outperforming the best single-modality result (IMU, 0.4368) by 0.1264 absolute accuracy points. This shows that the modalities contain complementary information and that feature-level fusion is beneficial even when one modality, such as WiFi, is weak on its own.
+
+One useful observation is that the multimodal model improves on the grouped validation split without relying on a leakage-prone row-wise partition. This makes the result more defensible in the report: the score is lower than the original optimistic split, but it is more representative of how well the model handles unseen recording sessions.
+
+\section{Discussion and Conclusion}
+This project implemented a complete multi-modal activity recognition pipeline using IRA, WiFi, and IMU data. The most important methodological choice in the final notebook was the use of a session-aware train/validation split. Because the raw files are collected in short bursts, a row-wise split can place closely related windows from the same recording in both training and validation, which produces misleadingly high validation accuracy. Grouping by session provides a stricter and more realistic evaluation.
+
+On this stricter split, IMU was the strongest single modality, IRA was slightly behind, and WiFi was the weakest individual sensor stream. The multimodal model produced the best overall result, improving validation accuracy from 0.4368 to 0.5632. This supports the main conclusion of the project: fusing modalities is useful because the different sensors capture different aspects of human activity.
+
+Future improvements could include stronger regularization, explicit data augmentation, and more systematic hyperparameter tuning. If additional time is available, the report can also be extended with exported training/validation curve figures and a short ablation study comparing unidirectional and bidirectional recurrent encoders.

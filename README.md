@@ -1,10 +1,12 @@
+```markdown
 # COMP3516 Group Project
 
 This repository contains our COMP3516 group project on multi-modal human activity recognition using the OctoNet dataset.
 
 ## Project Structure
 
-- `instructions.ipynb`: Main notebook containing Task 1, Task 2, and Task 3 code.
+- `instructions_v2.ipynb`: Main notebook containing Task 1, Task 2, and Task 3 code.
+- `plot_curves.ipynb`: Standalone notebook that regenerates the training/validation curve figures used in the report from the per-epoch logs captured from `instructions_v2.ipynb`.
 - `data_sources/`: Local dataset folder containing the `.pickle` sample files. This folder is required to run the notebook but is ignored by git.
 - `activity_masked.csv`: Input CSV with masked labels used for prediction.
 - `activity_ira.csv`: Prediction output for the IRA-only model.
@@ -30,11 +32,12 @@ Recommended libraries:
 
 ## Running the Project
 
-1. Open `instructions.ipynb` in Jupyter Notebook or VS Code.
+1. Open `instructions_v2.ipynb` in Jupyter Notebook or VS Code.
 2. Run the notebook cells in order.
 3. Task 1 generates visualization images.
 4. Task 2 trains single-modality models and exports the prediction CSV files.
 5. Task 3 trains the multimodal model and exports `activity_multi.csv`.
+6. Optionally, open `plot_curves.ipynb` and run all cells to regenerate the training/validation curve figures without retraining.
 
 ## Reproducibility Notes
 
@@ -57,3 +60,4 @@ The final submission should include:
 
 - `data_sources/` is not committed to GitHub because it is large and intended to stay local.
 - Run the notebook from the project root so relative paths resolve correctly.
+```

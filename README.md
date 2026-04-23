@@ -1,4 +1,4 @@
-```markdown
+
 # COMP3516 Group Project
 
 This repository contains our COMP3516 group project on multi-modal human activity recognition using the OctoNet dataset.
@@ -60,4 +60,3 @@ The final submission should include:
 
 - `data_sources/` is not committed to GitHub because it is large and intended to stay local.
 - Run the notebook from the project root so relative paths resolve correctly.
-```
